@@ -1,6 +1,7 @@
 ---
 title: "Homework 1"
 author: "Devin Koehl"
+professor: Byron Jaeger
 date: "`r Sys.Date()`"
 output: 
   html_document:
@@ -17,11 +18,11 @@ knitr::opts_chunk$set(
   )
 ```
 
-# Instructions
+#Instructions
 
 Complete the problems below. Use the 'finish_here.html' file to see what your finished markdown document should look like.
 
-# Prepping the data
+#Prepping the data
 
 - We will be using a curated version of the `gapminder` dataset.
 
@@ -31,7 +32,7 @@ Complete the problems below. Use the 'finish_here.html' file to see what your fi
 
 ```{r, echo=TRUE}
 
-# Load libraries
+#Load libraries
 suppressPackageStartupMessages({
   # for homework problems
   library(gapminder)
@@ -56,8 +57,7 @@ ggdata <- gapminder %>%
 
 ```
 
-
-# Problem 1
+#Problem 1
 
 Using `ggdata`, create the following plot (you can use different theme elements such as a grey background or text size). 
 
