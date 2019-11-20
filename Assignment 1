@@ -1,4 +1,3 @@
-
 ---
 title: "Homework 1"
 author: "Devin Koehl"
@@ -284,9 +283,6 @@ The plot does not change and remains the same. This is because we are not alteri
 ```
 
 
-
-
-
 # Problem 6
 Add a `geom_label_repel` layer to the plot that indicates which country in each continent has the highest or lowest life expectancy. Use `show.legend=FALSE` to stop the text from being incorporated into the legend. Also, note that you can set size outside of the call to `aes()` in order to make all the labels the same size and not in proportion to population size. 
 
@@ -355,52 +351,4 @@ plot + theme_bw() + annotate(
                                                                                                                                            size = 3.5,
                                                                                                                                            show.legend = FALSE
                                                                                                                                          )  
-
-
-###
-# Devin, this is an outstanding set of code. Thank you for your hard work!
-# Here are some thoughts: 
-# Your comments in line with each layer of your plots are fantastic
-# The organization of the markdown document is outstanding. 
-# The only problem I did not give you full credit on is problem 5 (see my comment)
-# It is easier to read ggplot code if there is a new line after each + sign. 
-# For example, the code for the plot above is easier for me to read if it looks like
-###
-
-plot + 
-  theme_bw() + 
-  annotate(
-    geom = "text",
-    x = 8.5,
-    y = 60,
-    size = 80,
-    colour = "grey",
-    label = "2007",
-    alpha = 0.2,
-    hjust = 0.5
-  ) + 
-  labs(x = "Income (log GDP per capita)",
-       y = "Life expectancy at birth, years",
-       size = "Population (millions)",
-       fill = "Continent")  + 
-  scale_size(range = (c(1, 20))) + 
-  guides(size = FALSE) + 
-  guides(
-    fill = guide_legend(override.aes = list(size = 15))) + 
-  geom_label_repel(
-    data = low_high,
-    aes(
-      x = log_income,
-      y = lifeExp,
-      label = country,
-      fill = continent
-    ),
-    color = 'black',
-    size = 3.5,
-    show.legend = FALSE
-  )  
-
-### Note: you can auto-format your code this way by highlighting it and then pressing ctrl+shift+a
-
-```
 
