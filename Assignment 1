@@ -274,27 +274,17 @@ The plot does not change and remains the same. This is because we are not alteri
 
 ```{r}
 
-###
-# But there is a difference! Take a closer look at the figures in 
-# problems 4 and 5. There are some points in the figure from problem 5 
-# that are not visible in the figure from problem 5. 
-###
-
 ```
-
 
 # Problem 6
 Add a `geom_label_repel` layer to the plot that indicates which country in each continent has the highest or lowest life expectancy. Use `show.legend=FALSE` to stop the text from being incorporated into the legend. Also, note that you can set size outside of the call to `aes()` in order to make all the labels the same size and not in proportion to population size. 
 
 ```{r warning=FALSE}
-#Lequin in class helped me with this, create a dataset that has the information we need
-#Originally I added a label but it labeled every point, I found out that I need to specify the exact parameters I need
 low_high <- ggdata %>%
   group_by(continent) %>%
   mutate(low=min_rank(lifeExp), high=min_rank(desc(lifeExp))) %>%
   filter(low==1 | high==1) %>%
   select(country, continent, lifeExp, log_income, low, high)
-
 
 ggdata <- gapminder %>% 
   # keep only rows where year is 2007
