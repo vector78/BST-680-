@@ -1,0 +1,291 @@
+---
+title: "Assignment 4"
+author: "Devin Koehl"
+date: "6/16/2019"
+output: html_document
+---
+
+# Instructions
+
+Complete the problems listed below. Use the code in lab 2 (see lecture 3) to help develop your own solutions. You can see solutions in the `start_here.html` file.
+
+```{r setup, echo=TRUE}
+
+# The following code sets up code chunk options
+# Feel free to modify to your preference
+knitr::opts_chunk$set(echo = FALSE)
+
+# read in packages
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(kableExtra)
+  library(magrittr)
+})
+
+# read in synthetic CVD data
+cvd_synth <- read_csv('data/synthdata_cvd.csv')
+
+# use glimpse to see a little bit of each variable in the data
+glimpse(cvd_synth)
+
+
+```
+
+# Recommendations
+
+The following links provide helpful tutorials.
+
+1. `kableExtra`: https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html
+
+2. `dplyr`: https://www.youtube.com/watch?v=jWjqLW-u3hc
+
+# Problem 1
+
+An inclusion / exclusion table details the steps that are taken to create an analysis dataset. For each step, participants who do not meet the inclusion criteria in the current step are removed from the data. Create an inclusion / exclusion table with the following steps.
+
+1. Remove participants with missing information for `chd_strk` or `time_chd_strk`
+
+2. Remove participants with missing information for `sbp` or `dbp`
+
+3. Remove participants with missing information for `alc` or `currentsmoker`.
+
+Create a table using `kable` and `kable_styling` that details the number of participants included and excluded at each step. Include an initial row that shows the initial number of participants in the data.
+
+```{r, echo=TRUE}
+
+synth <- tbl_df(cvd_synth)
+
+head(synth)
+
+filtered_data <- synth %>%          
+      filter(                         
+        !is.na(chd_strk),             
+        !is.na(time_chd_strk),
+        !is.na(sbp),
+        !is.na(dbp),
+        !is.na(alc),
+        !is.na(currentsmoker)
+  ) 
+
+
+#Create a factor variable for the cohort flow 
+cohort_flow = c(
+    "Initial study population",
+    "Participants with follow-up information for CHD and stroke",
+    "Participants with baseline information for clinic blood pressure",
+    "Participants who self-reported smoking and drinking habits"
+  )
+
+problem_1 <-
+  c(
+    nrow(synth),
+    cvd_synth %>%
+      filter(!is.na(chd_strk),!is.na(time_chd_strk),) %>%
+      nrow(),
+    synth %>%
+      filter(
+        !is.na(chd_strk),!is.na(time_chd_strk),!is.na(sbp),!is.na(dbp)
+      ) %>%
+      nrow(),
+    synth %>%
+      filter(
+        !is.na(chd_strk),!is.na(time_chd_strk),!is.na(sbp),!is.na(dbp),!is.na(alc),!is.na(currentsmoker)
+      ) %>%
+      nrow()
+  )            
+
+problem_1 %>%
+  set_names(cohort_flow) %>%
+  enframe(name = 'Inclusion criteria', ) %>%
+  mutate(`No. participants excluded` = c(0, abs(diff(value)))) %>%
+  rename(`No. participants included` = value) %>%
+  kable(align = c("l", "c", "c")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+  add_footnote(
+    "CHD = coronary heart disease; No. = Number.
+No participants were harmed in the creation of these fake data.",
+notation = "none"
+  )
+
+
+```
+
+# Problem 2
+
+Is self-reported alcohol consumption linked to having a stroke or coronary heart disease event? Let's find out.
+
+1. `alc` is currently coded as a 0/1 variable. A value of 0 indicates that participants did not self-report drinking alcohol, whereas a value of 1 indicates they did. Convert `alc` to a factor variable with labels of "No" and "Yes" corresponding to levels of 0 and 1. 
+
+2. Compute the following summary statistics for the two self-reported alcohol consumption groups: 
+
+    + Mean systolic blood pressure
+    + Mean diastolic blood pressure
+    + Incident CVD rate per 1000 person-years (1000 times the sum of `chd_strk` divided by sum of `time_chd_strk`)
+
+
+```{r, echo=TRUE}
+
+alc_table <- filtered_data %>%
+  mutate(
+    #Change from 0,1 to Yes/No
+    alc = factor(alc,
+                 levels = c(0, 1),
+                 labels = c("No", "Yes")),
+    #Calculate the rate 
+    cvd_rate = 1000 * sum(chd_strk == 'Yes') / sum(time_chd_strk),
+  )  %>%
+  #Group by alcohol
+  group_by(alc) %>%
+  #Create new variables to go in the table
+  summarise(
+    n = n(),
+    meanSBP = round(mean(sbp),2),
+    meanDBP = round(mean(dbp),2),
+    cvd_rate = round(1000 * sum(chd_strk == 'Yes') / sum(time_chd_strk),2)
+  ) %>%
+  #Select the variables we want to show in the table
+  select(alc, n, meanSBP, meanDBP, cvd_rate)  %>%
+         kable(
+           #Add the names we want
+           col.names = c(
+             "Self-reported alcohol consumption?",
+             "No. of participants",
+             "Systolic",
+             "Diastolic",
+             "Incident CVD Rate"
+           ),
+           #Alisngment for columns
+           align = c("l", "c", "c", "c", "c")
+         ) %>%
+  #Add striped styling
+  kable_styling("striped") %>%
+  #Add a header above the variable names
+  add_header_above(c("", "", "Mean blood pressure, mm Hg" = 2, "")) 
+    
+  #Print the table     
+  alc_table
+
+  
+  
+```
+
+3. Interpet these findings and write your thoughts. I will not count off if you are skeptic of the data but I will count off if you misinterpret the numbers in your own table. 
+
+The patients that do not have self-reported alcohol consumption have a higher incident rate of CVD (12.0 compared to 8.6). Also, the systolic blood pressures for patients with no alcohol consumption is lower. Diastolic blood pressure between both groups is close. Overall, the incidence rate for patients in the "no reported alcohol" consumption have a higher rate of CVD.
+
+# Problem 3
+
+Is smoking linked to having a stroke or coronary heart disease event? Let's find out.
+
+1. `currentsmoker` is currently coded as a 0/1 variable. A value of 0 indicates that participants did not self-report smoking within the last year, whereas a value of 1 indicates they did. Convert `currentsmoker` to a factor variable with labels of "No" and "Yes" representing the levels of 0 and 1.
+
+2. Compute the following summary statistics for the three smoking groups: 
+
+    + Mean systolic blood pressure
+    + Mean diastolic blood pressure
+    + Incident CVD rate per 1000 person-years
+
+3. Interpet these findings and write your thoughts. I will not count off if you are skeptic of the data but I will count off if you misinterpret the numbers in your own table.
+
+Patients that have reported smoking the last year have a higher incidence of CVD. These patients also have a higher systolic and distolic blood pressure. 
+
+```{r, echo=TRUE}
+
+smoke_table <- filtered_data %>%
+  mutate(
+    currentsmoker = factor(currentsmoker,
+                 levels = c(0, 1),
+                 labels = c("No", "Yes")),
+    cvd_rate = round(1000 * sum(chd_strk == 'Yes') / sum(time_chd_strk),2)
+  )  %>%
+  group_by(currentsmoker) %>%
+  summarise(
+    n = n(),
+    meanSBP = round(mean(sbp),2),
+    meanDBP = round(mean(dbp),2),
+    cvd_rate = round(1000 * sum(chd_strk == 'Yes') / sum(time_chd_strk),2),
+  ) %>%
+  select(currentsmoker, n, meanSBP, meanDBP, cvd_rate)  %>%
+         kable(
+           col.names = c(
+             "Self-reported smoking in past year?",
+             "No. of participants",
+             "Systolic",
+             "Diastolic",
+             "Incident CVD Rate"
+           ),
+           align = c("l", "c", "c", "c", "c")
+         ) %>%
+  kable_styling("striped") %>%
+  add_header_above(c("", "", "Mean blood pressure, mm Hg" = 2, "")) 
+         
+  smoke_table
+  
+ 
+
+```
+
+# Problem 4
+
+Replicate your analysis from problem 3 in sub-groups determined by alcohol consumption. 
+
+1. Tabulate the results with grouped rows (i.e., a set of rows for participants who self-reported drinking alcohol and a set of rows for participants who did not). 
+
+2. In each set of grouped rows, compute the hazard ratio for CVD events, using participants who did not self-report as smoking in the previous year as a reference group.
+
+3. Answer the following questions based on the **data in your table**. Do not worry about conducting formal statistical tests. Just read the numbers.
+
+    + Does smoking increase risk for CVD events? If so, by how much? 
+    
+    + Is the increase in CVD risk from smoking versus not smoking higher for participants who self-report drinking alcohol versus those who do not? 
+    
+    + What pattern of health behavior minimizes CVD risk? 
+
+
+```{r, echo=TRUE}
+
+smoke_alc_table <- filtered_data %>%
+  
+  mutate(
+    currentsmoker = factor(currentsmoker,
+                 levels = c(0, 1),
+                 labels = c("No", "Yes")),
+                  
+    alc = factor(alc,
+                 levels = c(0, 1),
+                 labels = c("No", "Yes")),
+    
+  cvd_rate = 1000 * sum(chd_strk == 'Yes') / sum(time_chd_strk)) %>%
+  group_by(alc,currentsmoker) %>%
+  summarise(
+    n = n(),
+    meanSBP = round(mean(sbp),2),
+    meanDBP = round(mean(dbp),2),
+    cvd_rate = round(1000 * sum(chd_strk == 'Yes') / sum(time_chd_strk),2)
+  ) %>%
+ ungroup()   %>%
+  mutate(cvd_ratio = round((cvd_rate / cvd_rate[1]),2)) %>% 
+  select(currentsmoker, n, meanSBP, meanDBP, cvd_rate,cvd_ratio)  %>%
+  kable(
+    col.names = c(
+      "Currently Smoking",
+      "No. of participants",
+      "Systolic",
+      "Diastolic",
+      "Incident CVD Rate",
+      "Hazard Ratio"
+    ),
+    align = c("l", "c", "c", "c","c","c")
+  ) %>%
+  kable_styling("striped") %>%
+  add_header_above(c("", "", "Mean blood pressure, mm Hg" = 2, "",""))  %>%
+  pack_rows("Participants who self-reported no alcohol consumption",1,2)  %>%
+  pack_rows("Participants who self-reported drinking alcohol",3,4) %>%
+  add_footnote("CHD = coronary heart disease")
+
+
+smoke_alc_table
+
+
+
+```
