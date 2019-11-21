@@ -1,0 +1,655 @@
+---
+title: "Lecture 3 - Data transformation with dplyr and forcats"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.height = 8,
+	fig.width = 12,
+	message = TRUE,
+	warning = FALSE
+)
+
+```
+
+# Introduction
+
+Visualisation is an important tool for data analysis, but you normally won't get data in exactly the right form for visualization. Normally, you will need to create some variables or summaries, or maybe just rename variables and arrange the data in a way that makes it easier to work with. You will learn how to do these types of tasks in this lecture using two new datasets: 
+
+- Flights departing New York City in 2013.
+- Data from the General Social Survey, a long-running study conducted by independent researchers at the University of Chicago.
+
+## Setting up packages
+
+```{r}
+
+library(nycflights13)
+library(tidyverse)
+
+```
+
+The conflicts message that’s printed above indicates that dplyr overwrites some functions in base R. Specifically, `stats::filter()` and `stats::lag()`. If you want to use these, you can utilize the `package name::` pre-fix.
+
+## NYC flights
+
+This data frame contains all 336,776 flights that departed from New York City in 2013. The data comes from the US Bureau of Transportation Statistics, and is documented in `?flights`.
+
+```{r}
+
+print(flights)
+
+```
+
+Notice the row of three (or four) letter abbreviations under the column names? These describe the type of each variable:
+
+- `int` stands for integers.
+
+- `dbl` stands for doubles, or real numbers.
+
+- `chr` stands for character vectors, or strings.
+
+- `dttm` stands for date-times (a date + a time).
+
+There are three other common types of variables that aren’t used in this dataset but will be encountered later:
+
+- `lgl` stands for logical, vectors that contain only TRUE or FALSE.
+
+- `fctr` stands for factors, which R uses to represent categorical variables with fixed possible values.
+
+- `date` stands for dates.
+
+# Core functions in `dplyr`
+
+There are five key `dplyr` functions that can be used to complete a very large collection of data transformation tasks:
+
+- `filter()`: Pick observations by their values.
+
+    + Logical operators are applied here: `>`, `>=`, `<`, `<=`, `!=` (not equal),  `==` (equal), `&` (and), `|` (or), and `!` (not). (See Figure 1). 
+    + Note that there are also conditional logical operators: `||` and `&&`, these are not necessary to understand yet.
+
+- `arrange()`: Sort the dataset by values in the specified columns.
+
+- `select()`: Pick variables by their names.
+
+    + This function also allows you to set new names for the variables you select.
+
+- `mutate()`: Create new variables with functions of existing variables.
+
+- `summarise()`: Collapse many values down to a single summary.
+
+Each of these functions will pair with grouped datasets, which are created using the `group_by()` function.
+
+![Figure 1: Logical operator illustrations](figure/transform_logical.png)
+
+## Example
+
+*Question*: How many flights leaving the NYC airport arrived at their destination early in February?
+
+```{r}
+
+
+answer <- flights %>% 
+  # keep the rows from february
+  filter(month == 2) %>% 
+  # create a logical variable for early arrival
+  mutate(early_arrival = arr_delay < 0) %>% 
+  # group the data by this variable
+  group_by(early_arrival) %>% 
+  # count the number of obs in each group
+  # this could also be done using tally()
+  summarise(n = n()) %>% 
+  mutate(perc = n / sum(n)) %>% 
+  # rename the columns with select
+  # (you could use the rename function here), i.e.
+  # rename(
+  #   `Arrived early` = early_arrival,
+  #   Flights = n
+  # )
+  select(
+    Early = early_arrival,
+    Flights = n,
+    Percent = perc
+  )
+  
+answer
+
+```
+
+Sometimes it's sufficient to print a `tibble` as-is. Other times, you may want to provide some more formatting to present your data as a table that would be acceptable in a formal report. The `kable` function and the `kableExtra` package help to make this easy. For example, 
+
+
+```{r}
+
+# the kable function is in the knitr package
+library(knitr)
+
+first_kab <- answer %>% 
+  kable(
+    # designate the format of the table
+    # (this is done automatically for markdown docs)
+    format = 'html',
+    # show decimals up to 1 digit
+    digits = 1,
+    # align colums as left - center - center
+    align = 'lcc',
+    # title for the table
+    caption = "Early and late flights leaving NYC in February",
+    col.names = c('Arrived early', 'No. of flights', "Proportion of flights")  
+  )
+
+first_kab
+
+```
+
+the `kableExtra` package offers some stylistic additions, such as
+
+```{r}
+
+library(kableExtra)
+
+first_kab %>% 
+  kable_styling(
+    bootstrap_options = c('striped', 'hover'),
+    full_width = TRUE,
+    font_size = 17
+  )
+
+```
+
+# Categorical variables
+
+Handling integers and doubles in R is fairly straightforward. Mathematical concepts (operations, magnitude, and order) apply. Categorical variables are less intuitive. The simplest type of categorical variable is logical. Variables of this type are represented using a `TRUE` or `FALSE` symbol, but R also recognizes them as numeric vectors with `TRUE` representing the number 1 and `FALSE` representing the number 0. For example, 
+
+```{r}
+
+x <- c(TRUE, FALSE, TRUE, TRUE)
+
+x * 2
+
+```
+
+```{r}
+
+x - 1
+
+```
+
+```{r}
+
+mean(x)
+
+```
+
+the `as.numeric()` function is a helpful way to see numeric representations of categorical variables, such as the logical variable `Arrived early`, which is in the `answer` object created above:
+
+```{r}
+
+as.numeric(answer$Early)
+
+```
+
+## Factors
+
+Factor variables in R represent variables with 2 or more discrete categories. Unlike logical variables, factors do not necessarily have an intuitive numeric representation. However, they can still be plugged into the `as.numeric` function. 
+## Creating a factor
+
+Factors are made up of three things: 
+
+- A collection of values (e.g., `c(1,2,3)` or `c('a','b','c')`
+
+- A set of levels (the order matters). For example, setting `levels = c(3,2,1)` will create a factor who has categories 3, 2, and 1. The order will make it so that `3` is the reference category for statistical models and tests.
+
+- A set of labels that will represent the categories. This is optional but highly recommended.
+
+```{r}
+
+f1 <- factor(
+  x = c(1,3,3,2,1,3,2,1,2,3,3,2),
+  levels = c(1, 2, 3),
+  labels = c(
+    "Reference Group",
+    "Second group",
+    "Third group"
+    )
+)
+
+f1
+
+```
+
+One key difference between factors and logical variables is that the first category of a factor variable is represented with a numeric 1, whereas the first category of a logical variable is represented with a 0. 
+
+```{r}
+
+as.numeric(f1)
+
+```
+
+A critical and often code-breaking characteristic of factors is that their numeric representation is **always** 1, 2, 3, etc. 
+
+```{r}
+
+f2 <- factor(
+  x = c(4,6,6,5,4,6,5,4,5,6,6,5),
+  levels = c(4, 5, 6),
+  labels = c(
+    "Reference Group",
+    "Second group",
+    "Third group"
+    )
+)
+
+as.numeric(f2)
+
+```
+
+
+
+## Handle factors with `forcats`
+
+To work with factors, we’ll use the forcats package, which provides tools for dealing with categorical variables (and it’s an anagram of factors!). It provides a wide range of helpers for working with factors. `forcats` is not part of the core tidyverse, so we need to load it explicitly.
+
+```{r}
+
+library(forcats)
+
+```
+
+`forcats` has *a lot* of useful functions for factors. For example, `fct_infreq` works like so
+
+```{r}
+
+# note that the third group appears most frequently
+# the second group appears the second most frequently
+# the reference group appears least frequently
+table(f1)
+
+
+# reorder factor levels by frequency
+fct_infreq(f1)
+
+```
+
+`fct_inorder` changes factor levels to follow the same order as the order that they appear in the factor values.
+
+```{r}
+
+fct_inorder(f1)
+
+```
+
+The `fct_c` function allows you to string two factors together. The two factors may or may not have any overlapping levels. 
+
+```{r}
+
+f_add <- factor(
+  x = c(4,3,3,3,3,3,4,4,4,5),
+  levels = c(3,4,5),
+  labels = c(
+    "Fourth group", 
+    "Fifth group", 
+    "Sixth group"
+  )
+)
+
+fct_c(f1, f_add)
+
+```
+
+## Working with factors in datasets
+
+Columns in data can be converted to factors and then handled with `forcats` functions. For example, let's revisit `answer` from our first example.
+
+```{r}
+
+# Early is currently a column of logical values
+# This code will change those values into a factor,
+# where TRUE is mapped to "Yes" and FALSE is mapped to "No"
+
+fct_example <- answer %>% 
+  mutate(
+    Early = factor(
+      Early, 
+      levels = c(FALSE, TRUE),
+      labels = c("No", "Yes")
+    )
+  )
+
+fct_example
+
+```
+
+Oftentimes it is preferable to explicitly code missing values as their own categories for categorical data. We can use the `fct_explicit_na` function for this.
+
+```{r, message=FALSE}
+
+# for reflexive pipes
+library(magrittr)
+
+fct_example %<>% 
+  mutate(Early = fct_explicit_na(Early, na_level = "Missing"))
+
+fct_example
+
+```
+
+# General social survey
+
+Remember, since this dataset is provided by a package, you can get more information about the variables with ?gss_cat. Here is a snippet of the help page: 
+
+- `year`: year of survey, 2000–2014
+
+- `age`: age in years. Maximum age truncated to 89.
+
+- `marital`: marital status
+
+- `race`: race
+
+- `rincome`: reported income
+
+- `partyid`: political party affiliation
+
+- `relig`: religion
+
+- `denom`: denomination
+
+- `tvhours`: hours per day watching tv
+
+```{r}
+
+gss_cat
+
+```
+
+When factors are stored in a tibble, you can’t see their levels so easily. One way to see them is with `count()`:
+
+```{r}
+
+gss_cat %>% count(marital)
+
+```
+
+## Modifying the order of levels in a factor
+
+It’s often useful to change the order of the factor levels in a visualisation. For example, imagine you want to explore the average number of hours spent watching TV per day across religions:
+
+```{r}
+
+theme_set(
+  new = theme_bw()+
+    theme(
+     text = element_text(size=24),
+     panel.grid = element_blank()
+    )
+)
+
+relig_summary <- gss_cat %>%
+  group_by(relig) %>%
+  summarise(
+    count(
+    tvhours_mn = mean(tvhours, na.rm = TRUE),
+    tvhours_sd = sd(tvhours, na.rm = TRUE),
+    n = n()
+  )
+
+ggplot(relig_summary, aes(tvhours_mn, relig)) + geom_point()
+
+```
+
+It is difficult to interpret this plot because there’s no overall pattern. We can improve it by reordering the levels of relig using `fct_reorder()`. `fct_reorder()` takes three arguments:
+
+- `f`, the factor whose levels you want to modify.
+- `x`, a numeric vector that you want to use to reorder the levels.
+- Optionally, `fun`, a function that’s used if there are multiple values of x for each value of f. The default value is median.
+
+```{r}
+
+relig_summary %>% 
+  ggplot(
+    aes(
+      x = tvhours_mn, 
+      y = fct_reorder(relig, tvhours_mn)
+    )
+  ) +
+  geom_point()
+
+# Note: this is equivalent to
+# relig_summary %>% 
+#   mutate(relig = fct_reorder(relig, tvhours_mn)) %>% 
+#   ggplot(
+#     aes(
+#       x = tvhours_mn, 
+#       y = relig
+#     )
+#   ) +
+#   geom_point()
+
+
+
+
+```
+
+Another type of reordering is useful when you are colouring the lines on a plot. `fct_reorder2()` reorders the factor by the y values associated with the largest x values. This makes the plot easier to read because the line colours line up with the legend.
+
+
+```{r}
+
+by_age <- gss_cat %>%
+  filter(!is.na(age)) %>%
+  count(age, marital) %>%
+  group_by(age) %>%
+  mutate(prop = n / sum(n))
+
+
+by_age %>% 
+  ggplot(
+    aes(
+      x = age, 
+      y = prop, 
+      colour = marital)
+  ) +
+  geom_line(na.rm = TRUE)
+
+```
+
+Notice how the legend is inconsistently ordered with respect to the pattern of lines in the graph?
+
+```{r}
+
+by_age %>% 
+  ggplot(
+    aes(
+      x = age, 
+      y = prop, 
+      colour = fct_reorder2(marital, age, prop))
+  ) +
+  geom_line() +
+  labs(colour = "marital")
+
+```
+
+## Modifying factor levels
+
+More powerful than changing the orders of the levels is changing their values. This allows you to clarify labels for publication, and collapse levels for high-level displays. The most general and powerful tool is `fct_recode()`. It allows you to recode, or change, the value of each level. For example, 
+
+```{r}
+
+gss_cat %>% count(partyid)
+
+```
+
+The levels are terse and inconsistent. Let’s tweak them to be longer and use a parallel construction.
+
+```{r}
+
+gss_cat %>%
+  mutate(
+    partyid = fct_recode(
+      partyid,
+      "Republican, strong"    = "Strong republican",
+      "Republican, weak"      = "Not str republican",
+      "Independent, near rep" = "Ind,near rep",
+      "Independent, near dem" = "Ind,near dem",
+      "Democrat, weak"        = "Not str democrat",
+      "Democrat, strong"      = "Strong democrat"
+    )
+  ) %>%
+  count(partyid)
+
+```
+
+`fct_recode()` will leave levels that aren’t explicitly mentioned as is, and will warn you if you accidentally refer to a level that doesn’t exist.
+
+To combine groups, you can assign multiple old levels to the same new level:
+
+```{r}
+
+gss_cat %>%
+  mutate(partyid = fct_recode(partyid,
+    "Republican, strong"    = "Strong republican",
+    "Republican, weak"      = "Not str republican",
+    "Independent, near rep" = "Ind,near rep",
+    "Independent, near dem" = "Ind,near dem",
+    "Democrat, weak"        = "Not str democrat",
+    "Democrat, strong"      = "Strong democrat",
+    "Other"                 = "No answer",
+    "Other"                 = "Don't know",
+    "Other"                 = "Other party"
+  )) %>%
+  count(partyid)
+
+```
+
+You must use this technique with care: if you group together categories that are truly different you will end up with misleading results.
+
+If you want to collapse a lot of levels, `fct_collapse()` is a useful variant of `fct_recode()`. For each new variable, you can provide a vector of old levels:
+
+```{r}
+
+
+gss_cat %>%
+  mutate(partyid = fct_collapse(partyid,
+    other = c("No answer", "Don't know", "Other party"),
+    rep = c("Strong republican", "Not str republican"),
+    ind = c("Ind,near rep", "Independent", "Ind,near dem"),
+    dem = c("Not str democrat", "Strong democrat")
+  )) %>%
+  count(partyid)
+
+```
+
+Sometimes you just want to lump together all the small groups to make a plot or table simpler. That’s the job of `fct_lump()`
+
+```{r}
+
+gss_cat %>%
+  mutate(relig = fct_lump(relig, n = 3)) %>%
+  count(relig)
+
+```
+
+`fct_lump()` and `fct_infreq()` pair well together:
+
+
+```{r}
+
+gss_cat %>%
+  mutate(
+    relig = fct_lump(relig, n = 3),
+    relig = fct_infreq(relig)
+    ) %>%
+  count(relig)
+
+```
+
+# Characteristics tables with `KableOne`
+
+Many studies present tables that show characteristics of their participants, stratified by a grouping variable. I struggle with these tables because they are incredibly tedious and I always end up forgetting at least one detail. So, I made a package to keep me from embarassing myself. It is called KableOne to link up the idea of using the `kable` function and `kableExtra` package to streamline creation of table 1. Here is how it works:
+
+
+```{r}
+
+library(KableOne)
+
+kbl1 <- gss_cat %>%
+  mutate(
+    partyid = fct_collapse(
+      partyid,
+      Other = c("No answer", "Don't know", "Other party"),
+      Republican = c("Strong republican", "Not str republican"),
+      Independent = c("Ind,near rep", "Independent", "Ind,near dem"),
+      Democrat = c("Not str democrat", "Strong democrat")
+    ),
+    partyid = fct_infreq(partyid)
+  ) %>% 
+  # select and label columns for analysis
+  select_labelled(
+    age = 'Age',
+    tvhours = 'TV watched per week',
+    marital = 'Marital Status',
+    relig = 'Faith practiced',
+    denom = 'Denomination',
+    partyid = 'Political party'
+  ) %>% 
+  # continuous variables need units (I always forget these)
+  set_variable_units(
+    age = 'years',
+    tvhours = 'hours'
+  ) %>%
+  # some tables group similar variables
+  set_variable_groups(
+    Religion = c('relig', 'denom')
+  ) %>% 
+  # some variables use abbreviations
+  # these need to be explicitly written in the footnote of the table
+  # (and in alphabetic order - I always forget that one too)
+  set_variable_abbrs(
+    tvhours = "TV = television",
+    denom = "dk = don't know"
+  ) %>% 
+  set_variable_notes(
+    marital = 'This is an unnecessary note to show off automatic footnote placement'
+  ) %>% 
+  # if factors have more than 5 levels, lump them
+  # after the lump, set their levels in order of frequency
+  # this fancy code will be covered in data transform part 2
+  # and then in more detail when we cover functions / iteration.
+  mutate_if(is.factor, ~ fct_lump(.x, n=5) %>% fct_infreq()) %>% 
+  KableOne::tibble_one(
+    strat = 'partyid',
+    include.pval = FALSE,
+    include.freq = TRUE
+  )
+
+kbl1
+
+```
+
+Cool table, but it needs to be presented in a manuscript. For that, we can use the `kibble_one()` function.
+
+```{r}
+
+kibble_one(
+  object = kbl1, 
+  format = 'html',
+  use.groups = TRUE
+) %>% 
+  kable_styling(
+    bootstrap_options = c('striped','hover')
+  )
+
+```
+
+
+
+
+
+
