@@ -1,0 +1,531 @@
+---
+title: "Lecture 2 - Intro to data visualization with ggplot2"
+date: "05/01/2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+
+# Don't worry about this yet
+# it just tells R to show code in the output document 
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.width = 12, 
+  fig.height = 8
+)
+
+```
+
+
+# Too long; didn't listen 
+
+If you'd prefer not to follow along this lecture, here is a fun problem you can work on instead. Re-create the figure below using the `bcj_abpm.csv` file. This data contains my blood pressure over 24 hours. Note that the second column, `data`, contains my systolic blood pressure, diastolic blood pressure, heart rate, and mean arterial pressure, separated by a space. Also, I went to bed at 11pm and woke up at 7am. Good luck!
+
+```{r, echo=FALSE}
+
+# Load libraries
+suppressPackageStartupMessages({
+  # for homework problems
+  library(gapminder)
+  library(tidyverse)
+  library(ggrepel)
+  # for optional problem
+  library(gganimate)
+  library(gifski)
+  library(lubridate)
+  library(grid)
+})
+
+theme_Publication <- function(base_size=16) {
+  
+  require(ggthemes)
+  
+  (theme_foundation(base_size=base_size)+ 
+      theme(plot.title = element_text(face = "bold",
+                                      size = rel(1), hjust = 0.5),
+            text = element_text(),
+            panel.background = element_rect(colour = NA),
+            plot.background = element_rect(fill = "transparent",colour = NA),
+            panel.border = element_rect(colour = 'black'),
+            legend.key.size = unit(3,"line"),
+            legend.key.height = unit(3,"line"),
+            axis.title = element_text(face = "bold",size = rel(1)),
+            axis.title.y = element_text(angle=90,vjust =2),
+            axis.title.x = element_text(vjust = -0.2),
+            axis.text = element_text(size=rel(1)),
+            axis.line = element_blank(), # element_line(colour="black"),
+            axis.ticks = element_line(),
+            panel.grid.major = element_blank(), #element_line(colour="#f0f0f0"),
+            panel.grid.minor = element_blank(),
+            legend.key = element_rect(colour = NA),
+            legend.position = "bottom",
+            legend.direction = "horizontal",
+            legend.title = element_text(face="italic"),
+            legend.text = element_text(size=rel(1)),
+            plot.margin=unit(c(10,5,5,5),"mm"),
+            strip.background=element_rect(colour="black",fill="#f0f0f0"),
+            strip.text = element_text(face="bold")
+      ))
+  
+}
+
+abpm <- read_csv('bcj_abpm.csv') %>% 
+  tidyr::separate(data, into = c("sbp","dbp","hr","map")) %>% 
+  mutate_if(is.character, as.numeric) %>% 
+  mutate(
+    awake = case_when(
+      time > hms('07:00:00') & time < hms('23:00:00') ~ 1, 
+      TRUE ~ 0
+    ),
+    order = 1:n(),
+  )
+
+vline_indx <- max(abpm$order[abpm$awake==1])
+ymin = min(abpm$sbp)-10
+ymax = max(abpm$sbp)
+
+readRDS('answer.RDS')
+
+```
+
+
+# The gapminder data
+
+Let’s take a look at the data
+
+```{r}
+
+# Load libraries
+suppressPackageStartupMessages({
+  # for homework problems
+  library(gapminder)
+  library(tidyverse)
+  library(ggrepel)
+  library(magrittr)
+})
+
+# use mutate to create a new column
+# the column is a log transformation of gdpPercap, i.e. income
+ggdata <- gapminder %>% 
+  mutate(log_income = log(gdpPercap))
+
+```
+
+# Two continuous variables
+
+**Question:** Is there any relationship between life expectancy and income? (income = `gdpPercap`)
+
+```{r}
+
+# pass ggdata into the ggplot function using %>% 
+scat_plot <- ggdata %>% 
+  # let the x-axis be the gdpPercap variable
+  # let the y-axis be the life expectancy variable
+  ggplot(
+    aes(x = gdpPercap, y = lifeExp)
+  ) 
+
+# ggplot lets you add layers however you want
+# we can add points to our base plot like so
+scat_plot+geom_point()
+
+```
+
+So, what's wrong with this plot? 
+
+**Skew.** We can fix that using `scale_x_log10` function or just using our own derived `log_income` variable.
+
+```{r}
+
+# pass ggdata into the ggplot function using %>% 
+scat_plot <- ggdata %>% 
+  # let the x-axis be the log income variable
+  # let the y-axis be the life expectancy variable
+  ggplot(aes(x = log_income, y = lifeExp)) 
+
+# ggplot lets you add layers however you want
+# we can add points to our base plot like so
+scat_plot+geom_point()
+
+```
+
+**Ambiguous labels** The x and y axes are not clearly labeled.
+
+```{r}
+
+scat_plot +
+  geom_point()+
+  # use the labs function to set axis labels
+  labs(
+    # set the x-axis label
+    x = 'Log income',
+    # set the y-axis label
+    y = 'Life expectancy, years'
+  )
+
+```
+
+**Overall relationship summary** It looks like income is positively correlated with life expectancy. However, it's tough to see the overall effect. 
+
+```{r}
+
+scat_plot +
+  geom_point() +
+  # use the labs function to set axis labels
+  labs(
+    # set the x-axis label
+    x = 'Log income',
+    # set the y-axis label
+    y = 'Life expectancy, years'
+  ) +
+  # check out the note that ggplot gives about geom_smooth
+  geom_smooth()
+
+```
+
+So, `gam` means generalized additive model and `s(x)` means that `ggplot` is using a spline behind the scenes to model the relationship between the `y` variable and the `x` variable. Neat, right? That's a lot of work for one line of code. But what if we didn't want a smooth line? We can tell that to `geom_smooth`:
+
+```{r}
+
+
+scat_plot +
+  geom_point() +
+  labs(
+    # set the x-axis label
+    x = 'Log income',
+    # set the y-axis label
+    y = 'Life expectancy, years'
+  ) +
+  # add a few arguments into the geom_smooth function
+  # this will use a linear model instead of a gam
+  geom_smooth(
+    method = 'lm',
+    # you could also use your own smoother
+    # e.g., y ~ poly(x, degree=4) fits a fourth degree polynomial
+    formula = y ~ poly(x, degree = 6),
+  )
+
+```
+
+**Aesthetics** grey backgrounds? No thanks (but fine if that's your preference)
+
+```{r}
+
+scat_plot +
+  geom_point(
+    # this shape lets you set fill and color of points
+    shape = 21,
+    # note that you can set aesthetics outside of aes()
+    # if you use aes(), the values are based on variables
+    color = 'black',
+    fill = 'grey80'
+  ) +
+  labs(
+    # set the x-axis label
+    x = 'Log income',
+    # set the y-axis label
+    y = 'Life expectancy, years'
+  ) +
+  geom_smooth(
+    # use the linear model instead of generalized additive model
+    method = 'lm',
+    # model the y variable as a polynomial function of x, with 4 df.
+    formula = y ~ poly(x, 4),
+    # set the color of the smoothing line to red
+    col = 'red',
+    # if se = TRUE, a ribbon is plotted to show confidence limits
+    # if se = FALSE, the ribbon is omitted. 
+    se = FALSE
+  ) + 
+  # this is a general black and white theme
+  theme_bw() +
+  # Here we add a couple of additional theme elements
+  theme(
+    # let's not have grid lines
+    # element_blank() allows you to remove theme elements
+    panel.grid = element_blank(),
+    # text needs to be read-able
+    # element_text() allows you to change text options, e.g. size
+    # the axis text corresponds to tick marks in the graph
+    axis.text = element_text(size=16),
+    # the axis title corresponds to the x- and y-axis labs.
+    axis.title = element_text(size=16)
+  )
+
+```
+
+**Sub-groups** Maybe the relationship between income and life expectancy varies across continents? We can assess this using `facet_wrap`
+
+```{r}
+
+scat_plot +
+  geom_point(
+    shape = 21,
+    col = 'black',
+    fill = 'grey80'
+  ) +
+  labs(
+    # set the x-axis label
+    x = 'Log income',
+    # set the y-axis label
+    y = 'Life expectancy, years'
+  ) +
+  geom_smooth(
+    # use the linear model instead of generalized additive model
+    method = 'lm',
+    # model the y variable as a polynomial function of x, with 4 df.
+    formula = y ~ poly(x, 4),
+    # set the color of the smoothing line to red
+    col = 'red',
+    # if se = TRUE, a ribbon is plotted to show confidence limits
+    # if se = FALSE, the ribbon is omitted. 
+    se = FALSE
+  ) + 
+  # this is a general black and white theme
+  theme_bw() +
+  # Here we add a couple of additional theme elements
+  theme(
+    # let's not have grid lines
+    # element_blank() allows you to remove theme elements
+    panel.grid = element_blank(),
+    # text needs to be read-able
+    # element_text() allows you to change text options, e.g. size
+    # the axis text corresponds to tick marks in the graph
+    axis.text = element_text(size=16),
+    # the axis title corresponds to the x- and y-axis labs.
+    axis.title = element_text(size=16)
+  ) +
+  # the facet_wrap and facet_grid functions take a formula 
+  # as an input. Formulas are special objects in R that
+  # contain a ~ symbol. Note that the facet variable comes in
+  # on the right hand side when we use facet_wrap with one variable.
+  facet_wrap(~continent)
+
+
+
+```
+
+Now let's filter the data down before we plot it, and take a closer look at countries in America.
+
+```{r}
+
+
+ggdata %>% 
+  dplyr::filter(continent == 'Americas') %>% 
+  ggplot(aes(x = log_income, y = lifeExp)) +
+  geom_point(
+    shape = 21,
+    col = 'black',
+    fill = 'grey80'
+  ) +
+  labs(
+    x = 'Log Income',
+    y = 'Life expectancy, years'
+  ) +
+  geom_smooth(
+    method = 'lm',
+    formula = y ~ poly(x, 4),
+    col = 'red',
+    se = FALSE
+  ) + 
+  theme_bw() +
+  theme(
+    # let's not have grid lines
+    panel.grid = element_blank(),
+    # text needs to be read-able
+    axis.text = element_text(size=16),
+    axis.title = element_text(size=16)
+  ) +
+  facet_wrap(~country)
+
+```
+
+**Your turn!** Try looking at a different set of countries by changing the continent that you filter to. Which panels stand out? Why?
+
+<br>
+<br>
+
+## Theme sets
+
+So, theme elements are a lot of code, and it would be nice to just set your favorite theme once and not worry about specifying it for every plot you make. Here's how to do that
+
+```{r}
+
+theme_set(
+  new = theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text = element_text(size=16),
+    axis.title = element_text(size=16),
+    # let's make legend text a little bigger and italic
+    # this only applies to text IN the legend
+    legend.text = element_text(size = 16, face = 'italic'),
+    # this applies to the legend title
+    legend.title = element_text(size = 16, face = 'bold.italic')
+  )
+)
+
+```
+
+
+# One continuous variable 
+
+Let's take a closer look at income
+
+```{r message=FALSE, warning=FALSE}
+
+# hist_plot is a blank canvas 
+hist_plot <- ggdata %>% 
+  ggplot(aes(x=gdpPercap)) +
+  geom_histogram(
+    fill = 'grey80',
+    col = 'black'
+  )
+
+# add a bar geom to it
+hist_plot
+
+```
+
+Not surprising! A lot of skew in the income distribution. But what about comparing distributions in the different continents? we could facet, but that makes it hard to compare distributions between groups. Instead, we will use `ggridges`, an R package that adds a little content to `ggplot`
+
+```{r}
+
+# this package is needed for ridge plots
+library(ggridges)
+
+ggdata %>% 
+  ggplot(
+    aes(
+      x = gdpPercap,
+      y = continent,
+      # note the use of ..density.., which is an internal
+      # variable that ggplot creates for you. We can reference
+      # the ..density.. variable without creating it as long
+      # as the geom is compatible with densities
+      height = ..density..
+    )
+  ) +
+  geom_density_ridges(
+    # this parameter sets the wiggliness of the density estimates.
+    # lower values => more wiggle
+    bandwidth=300
+  )
+
+
+```
+
+
+# One categorical variable 
+
+Let's take a look at the continents in the data. How many rows does each continent represent?
+
+```{r}
+
+ggdata %>% 
+  # note that we are only specifying the x-variable
+  ggplot(aes(x=continent))+
+  # this geom intrinsically computes a statistic when it is 
+  # called. The statistic that is called here is a count
+  geom_bar()
+
+```
+
+The order doesn't seem right. What could we do to fix this?
+
+```{r}
+
+ggdata %>% 
+  # reorder the levels of the continent variable
+  # by frequencies. This will rearrange the x-axis.
+  mutate(continent = fct_infreq(continent)) %>% 
+  # with the levels of continent sorted by frequency,
+  # the most frequently appearing variables are plotted first.
+  ggplot(aes(x=continent))+
+  geom_bar()
+
+
+```
+
+That looks a little better. **Question for you** Where are these counts coming from? (There is no column in the data that provides these numbers.)
+
+```{r}
+
+# Illustrating what ggplot is doing under the hood
+
+ggdata %>% 
+  # reorder the levels of the continent variable
+  # by frequencies. This will rearrange the x-axis.
+  mutate(continent = fct_infreq(continent)) %>% 
+  # group these data by continent
+  group_by(continent) %>% 
+  # use tally to count the number of observations in each group
+  tally() %>% 
+  # Notice how we specify the y-variable now?
+  ggplot(aes(x=continent, y = n))+
+  # Now we directly specify what the bar stat is 
+  # identity means we just want to plot the value of the y variable.
+  geom_bar(stat = 'identity')
+
+
+```
+
+```{r}
+
+ggdata %>% 
+  # reorder the levels of the continent variable
+  # by frequencies. This will rearrange the x-axis.
+  mutate(continent = fct_infreq(continent)) %>% 
+  # group these data by continent
+  group_by(continent) %>% 
+  # use summarize to count the number of observations in each group
+  # AND compute the average life expectancy
+  summarise(
+    n = n(),
+    mean_life_exp = mean(lifeExp)
+  ) %>% 
+  # Notice how we specify the y-variable now?
+  ggplot(aes(x=continent, y = n, fill = mean_life_exp))+
+  # Now we directly specify what the bar stat is 
+  # identity means we just want to plot the value of the y variable.
+  geom_bar(stat = 'identity')
+
+```
+
+
+# Continuous and categorical variable 
+
+```{r}
+
+# This package is needed for the mean_cl_normal function
+suppressPackageStartupMessages(
+  library(Hmisc)
+)
+
+
+ggdata %>% 
+  ggplot(aes(x=year, y=lifeExp, col=continent))+
+  # stat_summary will apply a summary function
+  # to the data, using groups determined by the 
+  # aesthetics of the plot. 
+  stat_summary(fun.data = mean_cl_normal)
+
+
+```
+
+The problem with this plot is that the confidence limits are overlapping. We can fix this using the `position_dodge` function.
+
+```{r}
+
+ggdata %>% 
+  ggplot(aes(x=year, y=lifeExp, col=continent))+
+  stat_summary(
+    fun.data = mean_cl_normal, 
+    position = position_dodge(width=5)
+  )
+
+```
